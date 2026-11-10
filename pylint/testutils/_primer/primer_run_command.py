@@ -43,7 +43,8 @@ class RunCommand(PrimerCommand):
             packages[package] = PackageData(commit=local_commit, messages=messages)
         path = self.primer_directory / (
             f"output_{'.'.join(str(i) for i in sys.version_info[:2])}_{self.config.type}"
-            + (f"_batch{self.config.batchIdx}.txt" if self.config.batches else "")
+            + (f"_batch{self.config.batchIdx}" if self.config.batches else "")
+            + ".txt"
         )
         print(f"Writing result in {path}")
         with open(path, "w", encoding="utf-8") as f:
