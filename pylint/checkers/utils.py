@@ -2029,6 +2029,22 @@ def _is_node_in_same_scope(
     return candidate.scope() is node_scope
 
 
+@lru_cache(maxsize=1024)
+def _bindings_in_scope(
+    node_scope: nodes.LocalsDictNodeNG,
+) -> dict[str, list[tuple[int, nodes.NodeNG]]]:
+    """Group the names bound anywhere below the given scope by name."""
+    bindings: dict[str, list[tuple[int, nodes.NodeNG]]] = {}
+    for candidate in node_scope.nodes_of_class(
+        (nodes.AssignName, nodes.ClassDef, nodes.FunctionDef)
+    ):
+        if candidate.lineno is not None:
+            bindings.setdefault(candidate.name, []).append(
+                (candidate.lineno, candidate)
+            )
+    return bindings
+
+
 def _is_reassigned_relative_to_current(
     node: nodes.NodeNG, varname: str, before: bool
 ) -> bool:
@@ -2043,18 +2059,11 @@ def _is_reassigned_relative_to_current(
     node_lineno = node.lineno
     if node_lineno is None:
         return False
-    for a in node_scope.nodes_of_class(
-        (nodes.AssignName, nodes.ClassDef, nodes.FunctionDef)
-    ):
-        if a.name == varname and a.lineno is not None:
-            if before:
-                if a.lineno < node_lineno:
-                    if _is_node_in_same_scope(a, node_scope):
-                        return True
-            elif a.lineno > node_lineno:
-                if _is_node_in_same_scope(a, node_scope):
-                    return True
-    return False
+    return any(
+        (lineno < node_lineno if before else lineno > node_lineno)
+        and _is_node_in_same_scope(candidate, node_scope)
+        for lineno, candidate in _bindings_in_scope(node_scope).get(varname, [])
+    )
 
 
 def is_reassigned_before_current(node: nodes.NodeNG, varname: str) -> bool:
